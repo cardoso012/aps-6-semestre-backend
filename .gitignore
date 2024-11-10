@@ -1,0 +1,6 @@
+uploads/*
+!uploads/.keep
+
+.venv
+database.db
+requests-example.txt
