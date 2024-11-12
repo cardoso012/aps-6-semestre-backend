@@ -5,3 +5,5 @@ uploads/*
 venv
 database.db
 requests-example.txt
+*.old.*
+text.txt

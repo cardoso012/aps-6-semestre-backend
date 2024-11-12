@@ -1,9 +1,10 @@
 import sqlite3
 import os
+import cv2
+import numpy as np
 from flask import Flask, request, jsonify, session, g
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-from deepface import DeepFace
 from flask_cors import CORS, cross_origin
 
 app = Flask(__name__)
@@ -19,7 +20,6 @@ cors = CORS(
 )
 
 DATABASE = 'database.db'
-MODEL_NAME = 'Facenet512'
 
 def get_db():
     db = getattr(g, '_database', None)
@@ -128,23 +128,40 @@ def compare():
     if not user_photo_path:
         return jsonify({'error': 'User photo not found'}), 404
     
-    img1_representation = DeepFace.represent(user_photo_path[0], model_name=MODEL_NAME)[0]["embedding"]
-    img2_representation = DeepFace.represent(image_path, model_name=MODEL_NAME)[0]["embedding"]
+    user_photo = cv2.imread(user_photo_path[0], cv2.IMREAD_GRAYSCALE)
+    received_image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
 
-    result = DeepFace.verify(
-        img1_path=img1_representation, 
-        img2_path=img2_representation, 
-        model_name=MODEL_NAME,
-        distance_metric='cosine',
-        enforce_detection=True
-    )
+    sift = cv2.SIFT_create()
 
-    similarity = (1 - result['distance'] / result['threshold']) * 100
+    kp1, des1 = sift.detectAndCompute(user_photo, None)
+    kp2, des2 = sift.detectAndCompute(received_image, None)
+
+    if des1 is None or des2 is None:
+        return jsonify({'mensagem': 'Não foi possível encontrar keypoints em uma das imagens.'}), 422
+
+    matches = cv2.FlannBasedMatcher(
+        indexParams={'algorithm': 1, 'tress': 5}, 
+        searchParams={'checks': 50}
+    ).knnMatch(des1, des2, k=2)
+
+    good_matches  = []
+    lowe_ratio = 0.7
+    for p, q in matches:
+        if p.distance < lowe_ratio * q.distance:
+            good_matches.append(p)
+
+    keypoints = min(len(kp1), len(kp2))
+    if keypoints == 0:
+        return jsonify({'mensagem': 'Nenhuma correspondência encontrada.'}), 400
+    
+    score = len(good_matches) / keypoints
+    match_threshold = 0.1
     os.remove(image_path)
 
     return jsonify({
-        'similaridade': similarity,
-        'verified': result['verified']
+        'verified': score > match_threshold, 
+        'threshold': match_threshold,
+        'score': score
     }), 200
 
 if __name__ == '__main__':

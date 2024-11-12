@@ -1,11 +1,15 @@
 # Usar uma imagem oficial do Python como base
-FROM python:3.9-slim
+FROM python:3.12.2-alpine
 
 # Definir o diretório de trabalho no contêiner
 WORKDIR /app
 
+RUN mkdir uploads
+
 # Copiar o arquivo de dependências para o contêiner
 COPY requirements.txt ./
+
+RUN pip install --upgrade pip
 
 # Instalar as dependências
 RUN pip install -r requirements.txt
